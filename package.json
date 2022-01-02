@@ -1,0 +1,14 @@
+{
+  "name": "firebase-graphql",
+  "repository": "git@github.com:YutaUra/firebase-graphql.git",
+  "author": "YutaUra <yuuta3594@outlook.jp>",
+  "license": "MIT",
+  "private": true,
+  "workspaces": {
+    "nohoist": [],
+    "packages": [
+      "packages/*",
+      "example"
+    ]
+  }
+}

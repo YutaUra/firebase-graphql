@@ -1,0 +1,33 @@
+{
+  "name": "@firebase-graphql/graphql-codegen-firestore-rules",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "author": "YutaUra",
+  "license": "MIT",
+  "scripts": {
+    "build:watch": "esbuild src/index.ts --bundle --external:graphql --format=cjs --outfile=dist/index.js --target=es2020 --platform=node --watch"
+  },
+  "dependencies": {
+    "@graphql-codegen/plugin-helpers": "^2.3.2",
+    "@graphql-codegen/schema-ast": "^2.4.1",
+    "@graphql-codegen/visitor-plugin-common": "^2.5.2",
+    "auto-bind": "^5.0.1"
+  },
+  "devDependencies": {
+    "@tsconfig/recommended": "^1.0.1",
+    "@typescript-eslint/eslint-plugin": "^5.8.1",
+    "@typescript-eslint/parser": "^5.8.1",
+    "esbuild": "^0.14.10",
+    "eslint": "^8.6.0",
+    "eslint-config-prettier": "^8.3.0",
+    "graphql": "^16.2.0",
+    "prettier": "^2.5.1",
+    "typescript": "^4.5.4"
+  },
+  "peerDependencies": {
+    "graphql": "^16.2.0"
+  }
+}
