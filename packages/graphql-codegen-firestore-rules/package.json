@@ -1,14 +1,30 @@
 {
   "name": "@firebase-graphql/graphql-codegen-firestore-rules",
-  "version": "0.0.1",
-  "main": "dist/index.js",
+  "version": "0.0.3",
   "files": [
     "dist"
   ],
   "author": "YutaUra",
   "license": "MIT",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "require": "./dist/cjs/index.js",
+      "import": "./dist/esm/index.js"
+    },
+    "./*": {
+      "require": "./dist/cjs/*.js",
+      "import": "./dist/esm/*.js"
+    }
+  },
   "scripts": {
-    "build:watch": "esbuild src/index.ts --bundle --external:graphql --format=cjs --outfile=dist/index.js --target=es2020 --platform=node --watch"
+    "build-base": "esbuild src/* --target=es2020 --platform=node --watch",
+    "build": "run-p build:*",
+    "build:cjs": "yarn build-base --format=cjs --outdir=dist/cjs",
+    "build:esm": "yarn build-base --format=esm --outdir=dist/esm",
+    "build-watch": "run-p build:* -- --watch"
   },
   "dependencies": {
     "@graphql-codegen/plugin-helpers": "^2.3.2",

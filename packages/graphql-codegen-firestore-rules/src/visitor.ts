@@ -145,9 +145,13 @@ export class FirestoreRulesVisitor<
     node: ObjectTypeDefinitionNode,
     directive: ConstDirectiveNode,
   ) {
-    const documentArg = directive?.arguments.find(
+    const documentArg = directive?.arguments?.find(
       (arg) => arg.name.value === 'document',
     )
+
+    if (!documentArg) {
+      throw new Error(`@firestore directive must have a 'document' argument`)
+    }
 
     if (documentArg.value.kind !== Kind.STRING) {
       // TODO: give a better error message
@@ -161,7 +165,7 @@ export class FirestoreRulesVisitor<
     this.children.push({
       kind: FirestoreRulesAstKind.MATCH,
       target: documentArg.value.value,
-      children: [this.getValidateFunction(node.fields)],
+      children: [this.getValidateFunction(node.fields ?? [])],
       allow: {
         [FirestoreRulesMatchAllowKind.CREATE]:
           'validate(request.resource.data)',
@@ -170,7 +174,7 @@ export class FirestoreRulesVisitor<
   }
 
   ObjectTypeDefinition: ASTVisitFn<ObjectTypeDefinitionNode> = (node) => {
-    const firestoreDirective = node.directives.find(
+    const firestoreDirective = node.directives?.find(
       (directive) => directive.name.value === 'firestore',
     )
 
