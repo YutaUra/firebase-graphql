@@ -53,8 +53,18 @@ const renderMatch = (
       )
       .map((v) => `${config.indent}${v}`),
     ...Object.entries(match.allow || {}).map(([key, value]) => {
-      // allow create: if validate(request.resource.data)
-      return `${config.indent}allow ${key}: if ${value}`
+      if (typeof value === 'string') {
+        return `${config.indent}allow ${key}: if ${value}`
+      } else if (value.length === 1) {
+        return `${config.indent}allow ${key}: if ${value[0]}`
+      } else {
+        return [
+          `${config.indent}allow ${key}: if ${value[0]}`,
+          ...value
+            .slice(1)
+            .map((v) => `${config.indent}               ${config.indent}${v}`),
+        ].join('\n')
+      }
     }),
     `}`,
   ].join('\n')

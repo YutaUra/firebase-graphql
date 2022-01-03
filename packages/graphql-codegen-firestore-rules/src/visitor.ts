@@ -2,7 +2,6 @@ import {
   BaseVisitor,
   ParsedTypesConfig,
 } from '@graphql-codegen/visitor-plugin-common'
-import autoBind from 'auto-bind'
 import {
   ASTVisitFn,
   ConstDirectiveNode,
@@ -13,12 +12,42 @@ import {
 } from 'graphql'
 import { FirestoreRulesPluginConfig } from './config'
 import {
+  FirestoreRulesAuthOperation,
+  FirestoreRulesAuthStrategy,
+} from './directives'
+import {
   FirestoreRulesAstKind,
   FirestoreRulesFunctionAst,
-  FirestoreRulesMatchAllowKind,
   FirestoreRulesMatchAst,
   FirestoreRulesRootAst,
 } from './rules-ast'
+import { NodeTransformer, NodeTransformer as t } from './schema-validators'
+
+const firestoreTypeTransformer = t
+  .objectTypeDefinition()
+  .directive('firestore', t.directive().arg('document', t.string()))
+  .directive(
+    'auth',
+    t
+      .directive()
+      .arg(
+        'rules',
+        t.list(
+          t
+            .object()
+            .field('allow', t.enum(FirestoreRulesAuthStrategy))
+            .field('operations', t.list(t.enum(FirestoreRulesAuthOperation)))
+            .field('ownerField', t.string().nullable()),
+        ),
+      )
+      .nullable(),
+  )
+
+type FirestoreType = typeof firestoreTypeTransformer extends NodeTransformer<
+  infer T
+>
+  ? T
+  : never
 
 export interface FirestoreRulesPluginParsedConfig extends ParsedTypesConfig {}
 
@@ -36,7 +65,6 @@ export class FirestoreRulesVisitor<
       ...(additionalConfig || {}),
     } as TParsedConfig)
 
-    autoBind(this)
     this.children = []
   }
 
@@ -76,6 +104,18 @@ export class FirestoreRulesVisitor<
                 args: ['source', 'field'],
                 statement: '!(field in source) || source[field] == null',
               },
+              {
+                kind: FirestoreRulesAstKind.FUNCTION,
+                name: 'isLoggedIn',
+                args: [],
+                statement: 'request.auth != null',
+              },
+              {
+                kind: FirestoreRulesAstKind.FUNCTION,
+                name: 'isAuthUserId',
+                args: ['userId'],
+                statement: 'isLoggedIn() && request.auth.uid == userId',
+              },
               ...this.children,
             ],
           },
@@ -84,7 +124,7 @@ export class FirestoreRulesVisitor<
     }
   }
 
-  getValidateScalarFunctionName(field: FieldDefinitionNode) {
+  private getValidateScalarFunctionName(field: FieldDefinitionNode) {
     const typeName =
       field.type.kind === Kind.NON_NULL_TYPE &&
       field.type.type.kind === Kind.NAMED_TYPE
@@ -104,7 +144,7 @@ export class FirestoreRulesVisitor<
     }
   }
 
-  getValidateFieldStatement(field: FieldDefinitionNode): string | null {
+  private getValidateFieldStatement(field: FieldDefinitionNode): string | null {
     const validateFunctionName = this.getValidateScalarFunctionName(field)
     if (!validateFunctionName) return null
 
@@ -127,7 +167,7 @@ export class FirestoreRulesVisitor<
     )
   }
 
-  getValidateFunction(
+  private getValidateFunction(
     fields: readonly FieldDefinitionNode[],
   ): FirestoreRulesFunctionAst {
     return {
@@ -141,35 +181,149 @@ export class FirestoreRulesVisitor<
     }
   }
 
-  processFirestoreType(
+  private getDefaultRules() {
+    return {
+      [FirestoreRulesAuthOperation.GET]: [],
+      [FirestoreRulesAuthOperation.LIST]: [],
+      [FirestoreRulesAuthOperation.CREATE]: ['validate(request.resource.data)'],
+      [FirestoreRulesAuthOperation.UPDATE]: ['validate(request.resource.data)'],
+      [FirestoreRulesAuthOperation.DELETE]: [],
+    }
+  }
+
+  private getAuthRuleCondition(
+    {
+      allow,
+      ownerField,
+    }: NonNullable<FirestoreType['directives']['auth']>['rules'][number],
+    operation: FirestoreRulesAuthOperation,
+    mapperFields: string[],
+  ) {
+    if (allow === FirestoreRulesAuthStrategy.PUBLIC) {
+      return 'true'
+    } else if (allow === FirestoreRulesAuthStrategy.PRIVATE) {
+      return 'isLoggedIn()'
+    } else if (allow === FirestoreRulesAuthStrategy.OWNER) {
+      if (!ownerField) {
+        throw new Error(
+          `'owner' auth strategy requires ownerField to be specified in the auth directive`,
+        )
+      }
+      const isOwnerFieldMapped = mapperFields.includes(ownerField)
+
+      switch (operation) {
+        case FirestoreRulesAuthOperation.GET:
+        case FirestoreRulesAuthOperation.LIST:
+          return isOwnerFieldMapped
+            ? `isAuthUserId(${ownerField})`
+            : `isAuthUserId(resource.data.${ownerField})`
+        case FirestoreRulesAuthOperation.DELETE:
+          return isOwnerFieldMapped
+            ? `isAuthUserId(${ownerField})`
+            : `isAuthUserId(resource.data.${ownerField})`
+        case FirestoreRulesAuthOperation.CREATE:
+          return isOwnerFieldMapped
+            ? `isAuthUserId(${ownerField})`
+            : `isAuthUserId(request.resource.data.${ownerField})`
+        case FirestoreRulesAuthOperation.UPDATE:
+          return isOwnerFieldMapped
+            ? `isAuthUserId(${ownerField})`
+            : `isAuthUserId(request.resource.data.${ownerField})`
+          return `isAuthUserId(${ownerField}) && isAuthUserId(${ownerField})`
+        default:
+          throw new Error(`Unsupported operation: ${operation}`)
+      }
+    } else {
+      throw new Error(`Unsupported auth strategy: ${allow}`)
+    }
+  }
+
+  private getAuthRulesCondition(
+    rules: NonNullable<FirestoreType['directives']['auth']>['rules'],
+    operation: FirestoreRulesAuthOperation,
+    mapperFields: string[],
+  ) {
+    return rules.map((rule) =>
+      this.getAuthRuleCondition(rule, operation, mapperFields),
+    )
+  }
+
+  private getAuthRules(
+    node: ObjectTypeDefinitionNode,
+    auth: FirestoreType['directives']['auth'],
+    mapperFields: string[],
+  ) {
+    if (!auth) {
+      // TODO
+      return {}
+    }
+
+    const { rules } = auth
+
+    const defaultRules = this.getDefaultRules()
+
+    return Object.fromEntries(
+      Object.values(FirestoreRulesAuthOperation).map<
+        [FirestoreRulesAuthOperation, string[]]
+      >((operation) => [
+        operation,
+        [
+          ...defaultRules[operation].map((v) => `${v} &&`),
+
+          ...this.getAuthRulesCondition(
+            rules.filter((rule) => rule.operations.includes(operation)),
+            operation,
+            mapperFields,
+          ).map(
+            (v, index, arr) =>
+              `${index === 0 ? '(' : ''}(${v})${
+                index === arr.length - 1 ? ')' : ' ||'
+              }`,
+          ),
+        ],
+      ]),
+    )
+  }
+
+  private getFirestoreDirective(node: ObjectTypeDefinitionNode) {
+    const { directives } = firestoreTypeTransformer.transform(node)
+
+    if (!directives.firestore.document.startsWith('/')) {
+      throw new Error('"document" argument must start with "/"')
+    }
+
+    return directives
+  }
+
+  private processFirestoreType(
     node: ObjectTypeDefinitionNode,
     directive: ConstDirectiveNode,
   ) {
-    const documentArg = directive?.arguments?.find(
-      (arg) => arg.name.value === 'document',
-    )
+    const { auth, firestore } = this.getFirestoreDirective(node)
 
-    if (!documentArg) {
-      throw new Error(`@firestore directive must have a 'document' argument`)
-    }
+    const mapperFields = [
+      ...firestore.document.matchAll(/{(?<mapper>[^{}]*?)}/g),
+    ].map((match) => {
+      return match.groups?.mapper ?? ''
+    })
 
-    if (documentArg.value.kind !== Kind.STRING) {
-      // TODO: give a better error message
-      throw new Error('"document" argument must be a string')
-    }
-
-    if (!documentArg.value.value.startsWith('/')) {
-      throw new Error('"document" argument must start with "/"')
+    if (!auth) {
+      console.warn(
+        `[warn] \`type ${node.name.value} @firestore { ... }\` doesn't have '@auth' directive.`,
+      )
     }
 
     this.children.push({
       kind: FirestoreRulesAstKind.MATCH,
-      target: documentArg.value.value,
-      children: [this.getValidateFunction(node.fields ?? [])],
-      allow: {
-        [FirestoreRulesMatchAllowKind.CREATE]:
-          'validate(request.resource.data)',
-      },
+      target: firestore.document,
+      children: [
+        this.getValidateFunction(
+          node.fields?.filter(
+            (filed) => !mapperFields.includes(filed.name.value),
+          ) ?? [],
+        ),
+      ],
+      allow: this.getAuthRules(node, auth, mapperFields),
     })
   }
 

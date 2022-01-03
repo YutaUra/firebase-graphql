@@ -25,11 +25,12 @@ export enum FirestoreRulesMatchAllowKind {
 }
 
 export type FirestoreRulesMatchAllowStatement = {
-  [kind in FirestoreRulesMatchAllowKind]?: string
+  [kind in FirestoreRulesMatchAllowKind]?: string | string[]
 }
 
 export interface FirestoreRulesMatchAst {
   kind: FirestoreRulesAstKind.MATCH
+
   target: string
   children: (FirestoreRulesMatchAst | FirestoreRulesFunctionAst)[]
   allow?: FirestoreRulesMatchAllowStatement
