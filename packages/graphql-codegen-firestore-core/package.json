@@ -1,0 +1,54 @@
+{
+  "name": "@firebase-graphql/graphql-codegen-firestore-core",
+  "version": "0.0.5",
+  "files": [
+    "dist"
+  ],
+  "author": "YutaUra",
+  "license": "MIT",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "typings": "./dist/types/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "require": "./dist/cjs/index.js",
+      "import": "./dist/esm/index.js",
+      "types": "./dist/types/index.d.ts"
+    },
+    "./*": {
+      "require": "./dist/cjs/*.js",
+      "import": "./dist/esm/*.js",
+      "types": "./dist/types/*.d.ts"
+    }
+  },
+  "scripts": {
+    "build-base": "swc src --no-swcrc -C jsc.parser.syntax=typescript -C sourceMaps=false",
+    "build": "run-p build:*",
+    "build:cjs": "yarn build-base -d dist/cjs -C module.type=commonjs",
+    "build:esm": "yarn build-base -d dist/esm -C module.type=es6",
+    "build:type": "tsc --emitDeclarationOnly --declarationMap --declaration --outDir dist/types",
+    "build-watch": "run-p \"build:* -- --watch\""
+  },
+  "dependencies": {
+    "@graphql-codegen/plugin-helpers": "^2.3.2",
+    "@graphql-codegen/schema-ast": "^2.4.1",
+    "@graphql-codegen/visitor-plugin-common": "^2.5.2"
+  },
+  "devDependencies": {
+    "@swc/cli": "^0.1.55",
+    "@swc/core": "^1.2.127",
+    "@tsconfig/recommended": "^1.0.1",
+    "@typescript-eslint/eslint-plugin": "^5.8.1",
+    "@typescript-eslint/parser": "^5.8.1",
+    "eslint": "^8.6.0",
+    "eslint-config-prettier": "^8.3.0",
+    "graphql": "^16.2.0",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^2.5.1",
+    "typescript": "^4.5.4"
+  },
+  "peerDependencies": {
+    "graphql": "^16.2.0"
+  }
+}
