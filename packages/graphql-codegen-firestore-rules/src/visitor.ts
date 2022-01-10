@@ -1,10 +1,10 @@
 import {
-  BaseVisitor,
-  ParsedTypesConfig,
-} from '@graphql-codegen/visitor-plugin-common'
+  FirestoreCoreVisitor,
+  FirestoreDocumentMatch,
+  FirestoreField,
+} from '@firebase-graphql/graphql-codegen-firestore-core'
+import { ParsedTypesConfig } from '@graphql-codegen/visitor-plugin-common'
 import {
-  ASTVisitFn,
-  ConstDirectiveNode,
   FieldDefinitionNode,
   GraphQLSchema,
   Kind,
@@ -54,7 +54,7 @@ export interface FirestoreRulesPluginParsedConfig extends ParsedTypesConfig {}
 export class FirestoreRulesVisitor<
   TRawConfig extends FirestoreRulesPluginConfig = FirestoreRulesPluginConfig,
   TParsedConfig extends FirestoreRulesPluginParsedConfig = FirestoreRulesPluginParsedConfig,
-> extends BaseVisitor<TRawConfig, TParsedConfig> {
+> extends FirestoreCoreVisitor<TRawConfig, TParsedConfig> {
   private children: (FirestoreRulesMatchAst | FirestoreRulesFunctionAst)[]
   constructor(
     private schema: GraphQLSchema,
@@ -229,7 +229,6 @@ export class FirestoreRulesVisitor<
           return isOwnerFieldMapped
             ? `isAuthUserId(${ownerField})`
             : `isAuthUserId(request.resource.data.${ownerField})`
-          return `isAuthUserId(${ownerField}) && isAuthUserId(${ownerField})`
         default:
           throw new Error(`Unsupported operation: ${operation}`)
       }
@@ -285,55 +284,23 @@ export class FirestoreRulesVisitor<
     )
   }
 
-  private getFirestoreDirective(node: ObjectTypeDefinitionNode) {
-    const { directives } = firestoreTypeTransformer.transform(node)
-
-    if (!directives.firestore.document.startsWith('/')) {
-      throw new Error('"document" argument must start with "/"')
-    }
-
-    return directives
-  }
-
-  private processFirestoreType(
+  override FirestoreTypeDefinition(
     node: ObjectTypeDefinitionNode,
-    directive: ConstDirectiveNode,
+    directives: FirestoreType['directives'],
+    match: FirestoreDocumentMatch,
+    fields: FirestoreField[],
   ) {
-    const { auth, firestore } = this.getFirestoreDirective(node)
-
-    const mapperFields = [
-      ...firestore.document.matchAll(/{(?<mapper>[^{}]*?)}/g),
-    ].map((match) => {
-      return match.groups?.mapper ?? ''
-    })
-
-    if (!auth) {
-      console.warn(
-        `[warn] \`type ${node.name.value} @firestore { ... }\` doesn't have '@auth' directive.`,
-      )
-    }
-
     this.children.push({
       kind: FirestoreRulesAstKind.MATCH,
-      target: firestore.document,
+      target: directives.firestore.document,
       children: [
         this.getValidateFunction(
           node.fields?.filter(
-            (filed) => !mapperFields.includes(filed.name.value),
+            (filed) => !match.mapperFields.includes(filed.name.value),
           ) ?? [],
         ),
       ],
-      allow: this.getAuthRules(node, auth, mapperFields),
+      allow: this.getAuthRules(node, directives.auth, match.mapperFields),
     })
-  }
-
-  ObjectTypeDefinition: ASTVisitFn<ObjectTypeDefinitionNode> = (node) => {
-    const firestoreDirective = node.directives?.find(
-      (directive) => directive.name.value === 'firestore',
-    )
-
-    if (firestoreDirective) {
-      this.processFirestoreType(node, firestoreDirective)
-    }
   }
 }
