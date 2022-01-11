@@ -158,7 +158,6 @@ export class FirestoreCoreVisitor<
           directive.name.value === 'hasMany',
       )
       if (isRelation) {
-        console.log(field)
         if (field.type.kind === Kind.LIST_TYPE) {
           if (field.type.type.kind !== Kind.NAMED_TYPE) {
             throw new Error(
