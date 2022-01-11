@@ -13,6 +13,8 @@ import {
   ObjectTypeDefinitionNode,
 } from 'graphql'
 import { FirestoreSchemaPluginConfig } from './config'
+import { ConstArgumentNodeBuilder } from './graphql-builders/ConstArgumentNodeBuilder'
+import { ConstDirectiveNodeBuilder } from './graphql-builders/ConstDirectiveNodeBuilder'
 import { FieldDefinitionNodeBuilder } from './graphql-builders/FieldDefinitionNodeBuilder'
 import { InputObjectTypeDefinitionNodeBuilder } from './graphql-builders/InputObjectTypeDefinitionNodeBuilder'
 import { InputValueDefinitionNodeBuilder } from './graphql-builders/InputValueDefinitionNodeBuilder'
@@ -21,6 +23,8 @@ import { NamedTypeNodeBuilder } from './graphql-builders/NamedTypeNodeBuilder'
 import { NameNodeBuilder } from './graphql-builders/NameNodeBuilder'
 import { ObjectTypeDefinitionNodeBuilder } from './graphql-builders/ObjectTypeDefinitionNodeBuilder'
 import { Scalars } from './graphql-builders/Scalars'
+import { ScalarTypeDefinitionNodeBuilder } from './graphql-builders/ScalarTypeDefinitionNodeBuilder'
+import { StringValueNodeBuilder } from './graphql-builders/StringValueNodeBuilder'
 import { TypeNodeBuilder } from './graphql-builders/TypeNodeBuilder'
 
 const isNotNullable = <T>(value: T | null | undefined): value is T =>
@@ -50,10 +54,19 @@ export class FirestoreRulesVisitor<
     this.definitions = []
   }
 
+  getScalars() {
+    return [
+      new ScalarTypeDefinitionNodeBuilder({
+        name: new NameNodeBuilder({ value: 'Timestamp' }),
+      }).build(),
+    ]
+  }
+
   get buildSchema(): DocumentNode {
     return {
       kind: Kind.DOCUMENT,
       definitions: [
+        ...this.getScalars(),
         ...this.definitions,
         {
           kind: Kind.OBJECT_TYPE_DEFINITION,
@@ -74,21 +87,23 @@ export class FirestoreRulesVisitor<
     }
   }
 
-  private _processGetQuery(node: ObjectTypeDefinitionNode) {
+  private _processGetQuery(
+    node: ObjectTypeDefinitionNode,
+    match: FirestoreDocumentMatch,
+  ) {
     this.query.push(
       new FieldDefinitionNodeBuilder({
         name: new NameNodeBuilder({ value: `get${node.name.value}` }),
         type: new NamedTypeNodeBuilder({
           name: new NameNodeBuilder({ value: node.name.value }),
         }),
-      })
-        .addArgument(
-          new InputValueDefinitionNodeBuilder({
-            name: new NameNodeBuilder({ value: 'id' }),
+        arguments: match.mapperFields.map((field) => {
+          return new InputValueDefinitionNodeBuilder({
+            name: new NameNodeBuilder({ value: field }),
             type: Scalars.ID.required(),
-          }),
-        )
-        .build(),
+          })
+        }),
+      }).build(),
     )
   }
 
@@ -112,8 +127,11 @@ export class FirestoreRulesVisitor<
     )
   }
 
-  private _processQuery(node: ObjectTypeDefinitionNode) {
-    this._processGetQuery(node)
+  private _processQuery(
+    node: ObjectTypeDefinitionNode,
+    match: FirestoreDocumentMatch,
+  ) {
+    this._processGetQuery(node, match)
     this._processListQuery(node)
   }
 
@@ -300,6 +318,7 @@ export class FirestoreRulesVisitor<
 
   private _processType(
     node: ObjectTypeDefinitionNode,
+    directives: FirestoreType['directives'],
     fields: FirestoreField[],
   ) {
     const connection = new ObjectTypeDefinitionNodeBuilder({
@@ -345,7 +364,11 @@ export class FirestoreRulesVisitor<
           }
           return new FieldDefinitionNodeBuilder({
             name: NameNodeBuilder.fromNode(field.name),
-            type: connection.toNamedType(),
+            type: new NamedTypeNodeBuilder({
+              name: new NameNodeBuilder({
+                value: `${field.relationTo.value}Connection`,
+              }),
+            }),
           }).addArgument(
             new InputValueDefinitionNodeBuilder({
               name: new NameNodeBuilder({ value: 'nextToken' }),
@@ -353,7 +376,20 @@ export class FirestoreRulesVisitor<
             }),
           )
         }),
-      }).build(),
+      })
+        .addDirective(
+          new ConstDirectiveNodeBuilder({
+            name: new NameNodeBuilder({ value: 'firestore' }),
+          }).addArgument(
+            new ConstArgumentNodeBuilder({
+              name: new NameNodeBuilder({ value: 'document' }),
+              value: new StringValueNodeBuilder({
+                value: directives.firestore.document,
+              }),
+            }),
+          ),
+        )
+        .build(),
     )
   }
 
@@ -363,9 +399,9 @@ export class FirestoreRulesVisitor<
     match: FirestoreDocumentMatch,
     fields: FirestoreField[],
   ) {
-    this._processQuery(node)
+    this._processQuery(node, match)
     this._processMutation(node, match, fields)
     this._processSubscription(node)
-    this._processType(node, fields)
+    this._processType(node, directives, fields)
   }
 }
