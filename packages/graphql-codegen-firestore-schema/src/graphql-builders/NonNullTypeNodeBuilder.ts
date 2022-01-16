@@ -21,6 +21,12 @@ export class NonNullTypeNodeBuilder implements BuilderAstNode<NonNullTypeNode> {
     return new NonNullTypeNodeBuilder({ type: this.node.type.copy() })
   }
 
+  toList() {
+    return new ListTypeNodeBuilder({
+      type: this.copy(),
+    })
+  }
+
   static fromNode(node: NamedTypeNode | ListTypeNode): NonNullTypeNodeBuilder {
     if (node.kind === Kind.NAMED_TYPE) {
       return new NonNullTypeNodeBuilder({

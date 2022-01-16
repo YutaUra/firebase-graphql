@@ -4,17 +4,23 @@ import {
   FirestoreField,
   FirestoreType,
 } from '@firebase-graphql/graphql-codegen-firestore-core'
-import { ParsedTypesConfig } from '@graphql-codegen/visitor-plugin-common'
 import {
   DefinitionNode,
   DocumentNode,
   FieldDefinitionNode,
+  GraphQLSchema,
   Kind,
   ObjectTypeDefinitionNode,
 } from 'graphql'
-import { FirestoreSchemaPluginConfig } from './config'
+import {
+  FirestoreSchemaPluginConfig,
+  FirestoreSchemaPluginParsedConfig,
+} from './config'
 import { ConstArgumentNodeBuilder } from './graphql-builders/ConstArgumentNodeBuilder'
 import { ConstDirectiveNodeBuilder } from './graphql-builders/ConstDirectiveNodeBuilder'
+import { DirectiveDefinitionNodeBuilder } from './graphql-builders/DirectiveDefinitionNodeBuilder'
+import { EnumTypeDefinitionNodeBuilder } from './graphql-builders/EnumTypeDefinitionNodeBuilder'
+import { EnumValueDefinitionNodeBuilder } from './graphql-builders/EnumValueDefinitionNodeBuilder'
 import { FieldDefinitionNodeBuilder } from './graphql-builders/FieldDefinitionNodeBuilder'
 import { InputObjectTypeDefinitionNodeBuilder } from './graphql-builders/InputObjectTypeDefinitionNodeBuilder'
 import { InputValueDefinitionNodeBuilder } from './graphql-builders/InputValueDefinitionNodeBuilder'
@@ -30,21 +36,20 @@ import { TypeNodeBuilder } from './graphql-builders/TypeNodeBuilder'
 const isNotNullable = <T>(value: T | null | undefined): value is T =>
   value !== null && value !== undefined
 
-export interface FirestoreRulesPluginParsedConfig extends ParsedTypesConfig {}
-
-export class FirestoreRulesVisitor<
+export class FirestoreSchemaVisitor<
   TRawConfig extends FirestoreSchemaPluginConfig = FirestoreSchemaPluginConfig,
-  TParsedConfig extends FirestoreRulesPluginParsedConfig = FirestoreRulesPluginParsedConfig,
+  TParsedConfig extends FirestoreSchemaPluginParsedConfig = FirestoreSchemaPluginParsedConfig,
 > extends FirestoreCoreVisitor<TRawConfig, TParsedConfig> {
   private query: FieldDefinitionNode[]
   private mutation: FieldDefinitionNode[]
   private subscription: FieldDefinitionNode[]
   private definitions: DefinitionNode[]
   constructor(
+    schema: GraphQLSchema,
     pluginConfig: TRawConfig,
     additionalConfig: Partial<TParsedConfig> = {},
   ) {
-    super(pluginConfig, {
+    super(schema, pluginConfig, {
       ...(additionalConfig || {}),
     } as TParsedConfig)
 
@@ -62,11 +67,54 @@ export class FirestoreRulesVisitor<
     ]
   }
 
+  getDirectives() {
+    return [
+      new DirectiveDefinitionNodeBuilder({
+        name: new NameNodeBuilder({ value: 'firestore' }),
+        locations: [new NameNodeBuilder({ value: 'OBJECT' })],
+        repeatable: false,
+        arguments: [
+          new InputValueDefinitionNodeBuilder({
+            name: new NameNodeBuilder({ value: 'document' }),
+            type: Scalars.String.required(),
+          }),
+        ],
+      }),
+
+      new EnumTypeDefinitionNodeBuilder({
+        name: new NameNodeBuilder({ value: 'RelationType' }),
+      }).addValue(
+        new EnumValueDefinitionNodeBuilder({
+          name: new NameNodeBuilder({ value: 'get' }),
+        }),
+      ),
+
+      new DirectiveDefinitionNodeBuilder({
+        name: new NameNodeBuilder({ value: 'relation' }),
+        locations: [new NameNodeBuilder({ value: 'FIELD_DEFINITION' })],
+        repeatable: false,
+        arguments: [
+          new InputValueDefinitionNodeBuilder({
+            name: new NameNodeBuilder({ value: 'type' }),
+            type: new NamedTypeNodeBuilder({
+              name: new NameNodeBuilder({ value: 'RelationType' }),
+            }),
+          }),
+          new InputValueDefinitionNodeBuilder({
+            name: new NameNodeBuilder({ value: 'fields' }),
+            type: Scalars.String.required().toList(),
+          }),
+        ],
+      }),
+    ].map((v) => v.build())
+  }
+
   get buildSchema(): DocumentNode {
     return {
       kind: Kind.DOCUMENT,
       definitions: [
         ...this.getScalars(),
+        ...this.getDirectives(),
         ...this.definitions,
         {
           kind: Kind.OBJECT_TYPE_DEFINITION,

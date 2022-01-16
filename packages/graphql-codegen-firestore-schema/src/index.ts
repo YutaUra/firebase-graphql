@@ -2,7 +2,7 @@ import { PluginFunction, Types } from '@graphql-codegen/plugin-helpers'
 import { transformSchemaAST } from '@graphql-codegen/schema-ast'
 import { GraphQLSchema, print, visit } from 'graphql'
 import { FirestoreSchemaPluginConfig } from './config'
-import { FirestoreRulesVisitor } from './visitor'
+import { FirestoreSchemaVisitor } from './visitor'
 
 export const plugin: PluginFunction<
   FirestoreSchemaPluginConfig,
@@ -14,7 +14,7 @@ export const plugin: PluginFunction<
 ) => {
   const { schema: _schema, ast } = transformSchemaAST(schema, config)
 
-  const visitor = new FirestoreRulesVisitor(config)
+  const visitor = new FirestoreSchemaVisitor(schema, config)
 
   visit(ast, visitor)
 
