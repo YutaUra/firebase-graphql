@@ -15,7 +15,7 @@ export const plugin: PluginFunction<
 ) => {
   const { ast } = transformSchemaAST(schema, config)
 
-  const visitor = new FirestoreServerVisitor(config)
+  const visitor = new FirestoreServerVisitor(schema, config)
 
   visit(ast, visitor)
 
@@ -30,7 +30,7 @@ export const plugin: PluginFunction<
       `import { ApolloServerBase, GraphQLExecutionResult, GraphQLRequest } from "apollo-server-core";`,
       `import { DocumentNode, getOperationAST, OperationTypeNode, parse, subscribe } from "graphql";`,
       `import { FirebaseApp } from 'firebase/app'`,
-      `import { doc, FirestoreDataConverter, getDoc, getFirestore } from 'firebase/firestore'`,
+      `import { addDoc, collection, doc, FirestoreDataConverter, getDoc, getFirestore, setDoc } from 'firebase/firestore'`,
       `import { gql } from 'graphql-tag'`,
     ],
     content:
@@ -74,8 +74,6 @@ export const plugin: PluginFunction<
 ` +
       `
 const typeDefs = gql\`
-directive @firestore(document: String!) on OBJECT
-
 ${print(ast)}
 \`;
 

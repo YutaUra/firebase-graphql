@@ -4,6 +4,7 @@ import {
   MemberName,
   PropertyAccessExpression,
 } from 'typescript'
+import { CallExpressionBuilder } from './CallExpressionBuilder'
 import { Builder } from './types'
 
 export type PropertyAccessExpressionBuilderOptions = {
@@ -32,6 +33,19 @@ export class PropertyAccessExpressionBuilder
         typeof this.options.name === 'string'
           ? this.options.name
           : this.options.name.copy(),
+    })
+  }
+
+  dot(name: string | Builder<MemberName>) {
+    return new PropertyAccessExpressionBuilder({
+      expression: this.copy(),
+      name,
+    })
+  }
+
+  call() {
+    return new CallExpressionBuilder({
+      expression: this.copy(),
     })
   }
 }

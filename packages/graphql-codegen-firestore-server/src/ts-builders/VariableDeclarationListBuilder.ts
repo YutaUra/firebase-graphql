@@ -39,4 +39,11 @@ export class VariableDeclarationListBuilder
       flags: this.options.flags,
     })
   }
+
+  const() {
+    return new VariableDeclarationListBuilder({
+      declarations: (this.options.declarations ?? []).map((v) => v.copy()),
+      flags: NodeFlags.Const,
+    })
+  }
 }

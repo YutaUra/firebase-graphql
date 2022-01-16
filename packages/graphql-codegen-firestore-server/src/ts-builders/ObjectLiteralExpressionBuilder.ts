@@ -1,8 +1,10 @@
 import {
+  Expression,
   factory as f,
   ObjectLiteralElementLike,
   ObjectLiteralExpression,
 } from 'typescript'
+import { PropertyAssignmentBuilder } from './PropertyAssignmentBuilder'
 import { Builder } from './types'
 
 export type ObjectLiteralExpressionOptions = {
@@ -38,6 +40,22 @@ export class ObjectLiteralExpressionBuilder
         property,
       ],
       multiLine: this.options.multiLine,
+    })
+  }
+
+  static fromObject(
+    object: Record<string, Builder<Expression>>,
+    multiLine?: boolean,
+  ) {
+    return new ObjectLiteralExpressionBuilder({
+      multiLine,
+      properties: Object.entries(object).map(
+        ([name, initializer]) =>
+          new PropertyAssignmentBuilder({
+            name,
+            initializer,
+          }),
+      ),
     })
   }
 }

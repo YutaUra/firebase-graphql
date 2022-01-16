@@ -1,4 +1,12 @@
-import { CallExpression, Expression, factory as f, TypeNode } from 'typescript'
+import {
+  CallExpression,
+  Expression,
+  factory as f,
+  MemberName,
+  TypeNode,
+} from 'typescript'
+import { AwaitExpressionBuilder } from './AwaitExpressionBuilder'
+import { PropertyAccessExpressionBuilder } from './PropertyAccessExpressionBuilder'
 import { Builder } from './types'
 
 export type CallExpressionBuilderOptions = {
@@ -45,6 +53,19 @@ export class CallExpressionBuilder implements Builder<CallExpression> {
         ...(this.options.argumentsArray ?? []).map((v) => v.copy()),
         argument,
       ],
+    })
+  }
+
+  await() {
+    return new AwaitExpressionBuilder({
+      expression: this.copy(),
+    })
+  }
+
+  dot(name: string | Builder<MemberName>) {
+    return new PropertyAccessExpressionBuilder({
+      expression: this.copy(),
+      name,
     })
   }
 }

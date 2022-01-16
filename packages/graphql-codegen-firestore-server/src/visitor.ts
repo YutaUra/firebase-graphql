@@ -4,11 +4,13 @@ import {
   FirestoreField,
   FirestoreType,
 } from '@firebase-graphql/graphql-codegen-firestore-core'
-import { ParsedTypesConfig } from '@graphql-codegen/visitor-plugin-common'
 import { camelCase } from 'change-case'
-import { ObjectTypeDefinitionNode } from 'graphql'
+import { GraphQLSchema, ObjectTypeDefinitionNode } from 'graphql'
 import ts, { NodeFlags, SyntaxKind } from 'typescript'
-import { FirestoreServerPluginConfig } from './config'
+import {
+  FirestoreServerPluginConfig,
+  FirestoreServerPluginParsedConfig,
+} from './config'
 import { ArrowFunctionBuilder } from './ts-builders/ArrowFunctionBuilder'
 import { AwaitExpressionBuilder } from './ts-builders/AwaitExpressionBuilder'
 import { BinaryExpressionBuilder } from './ts-builders/BinaryExpressionBuilder'
@@ -16,6 +18,7 @@ import { BlockBuilder } from './ts-builders/BlockBuilder'
 import { CallExpressionBuilder } from './ts-builders/CallExpressionBuilder'
 import { EndOfFileTokenBuilder } from './ts-builders/EndOfFileTokenBuilder'
 import { EqualsGreaterThanTokenBuilder } from './ts-builders/EqualsGreaterThanTokenBuilder'
+import { ExpressionStatementBuilder } from './ts-builders/ExpressionStatementBuilder'
 import { IdentifierBuilder } from './ts-builders/IdentifierBuilder'
 import { IfStatementBuilder } from './ts-builders/IfStatementBuilder'
 import { MethodDeclarationBuilder } from './ts-builders/MethodDeclarationBuilder'
@@ -31,6 +34,7 @@ import { RegularExpressionLiteralBuilder } from './ts-builders/RegularExpression
 import { ReturnStatementBuilder } from './ts-builders/ReturnStatementBuilder'
 import { ShorthandPropertyAssignmentBuilder } from './ts-builders/ShorthandPropertyAssignmentBuilder'
 import { SourceFileBuilder } from './ts-builders/SourceFileBuilder'
+import { StringLiteralBuilder } from './ts-builders/StringLiteralBuilder'
 import { TemplateExpressionBuilder } from './ts-builders/TemplateExpressionBuilder'
 import { TemplateHeadBuilder } from './ts-builders/TemplateHeadBuilder'
 import { TemplateSpanBuilder } from './ts-builders/TemplateSpanBuilder'
@@ -45,8 +49,6 @@ import { VariableStatementBuilder } from './ts-builders/VariableStatementBuilder
 const isNotNullable = <T>(value: T | null | undefined): value is T =>
   value !== null && value !== undefined
 
-export interface FirestoreServerPluginParsedConfig extends ParsedTypesConfig {}
-
 export class FirestoreServerVisitor<
   TRawConfig extends FirestoreServerPluginConfig = FirestoreServerPluginConfig,
   TParsedConfig extends FirestoreServerPluginParsedConfig = FirestoreServerPluginParsedConfig,
@@ -58,10 +60,11 @@ export class FirestoreServerVisitor<
   private _statements: Builder<ts.Statement>[]
 
   constructor(
+    schema: GraphQLSchema,
     pluginConfig: TRawConfig,
     additionalConfig: Partial<TParsedConfig> = {},
   ) {
-    super(pluginConfig, {
+    super(schema, pluginConfig, {
       ...(additionalConfig || {}),
     } as TParsedConfig)
 
@@ -303,10 +306,9 @@ export class FirestoreServerVisitor<
                 }).addArgument(
                   RegularExpressionLiteralBuilder.fromRegexp(
                     new RegExp(
-                      `^${directives.firestore.document.replace(
-                        /{(?<field>[^}]+)}/g,
-                        '(?<$<field>>[^/]+)',
-                      )}$`,
+                      `^${directives.firestore.document
+                        .replace(/^\//, '')
+                        .replace(/{(?<field>[^}]+)}/g, '(?<$<field>>[^/]+)')}$`,
                     ),
                   ),
                 ),
@@ -339,7 +341,7 @@ export class FirestoreServerVisitor<
                 }).addArgument(
                   new TemplateExpressionBuilder({
                     head: new TemplateHeadBuilder({
-                      text: 'Invalid post path. got ',
+                      text: `Invalid ${node.name.value} path. got `,
                     }),
                     templateSpans: [
                       new TemplateSpanBuilder({
@@ -546,6 +548,194 @@ export class FirestoreServerVisitor<
     )
   }
 
+  private _processCreateMutation(
+    node: ObjectTypeDefinitionNode,
+    directives: FirestoreType['directives'],
+    match: FirestoreDocumentMatch,
+    fields: FirestoreField[],
+  ) {
+    const createSource = new ObjectLiteralExpressionBuilder({
+      multiLine: true,
+      properties: fields
+        .map((field) => {
+          if (field.isRelation) {
+            return null
+          }
+          if (match.mapperFields.includes(field.name.value)) {
+            return new PropertyAssignmentBuilder({
+              name: field.name.value,
+              initializer: new NullBuilder({}).nonNull(),
+            })
+          }
+          return new PropertyAssignmentBuilder({
+            name: field.name.value,
+            initializer: new IdentifierBuilder({ text: 'args' })
+              .dot('input')
+              .dot(field.name.value),
+          })
+        })
+        .filter(isNotNullable),
+    }).addProperty(
+      new PropertyAssignmentBuilder({
+        name: '__typename',
+        initializer: new StringLiteralBuilder({ text: node.name.value }),
+      }),
+    )
+    const setDocBlock = new BlockBuilder({ multiLine: true })
+      .addStatement(
+        new VariableStatementBuilder({
+          declarationList: new VariableDeclarationListBuilder({
+            flags: NodeFlags.Const,
+          }).addDeclaration(
+            new VariableDeclarationBuilder({
+              name: 'ref',
+              initializer: new CallExpressionBuilder({
+                expression: new CallExpressionBuilder({
+                  expression: new IdentifierBuilder({ text: 'doc' }),
+                })
+                  .addArgument(new IdentifierBuilder({ text: 'firestore' }))
+                  .addArgument(
+                    TemplateExpressionBuilder.fromCode(
+                      /* TODO */ `\`$\{todo}\``,
+                    ),
+                  )
+                  .dot('withConverter'),
+                argumentsArray: [
+                  new IdentifierBuilder({
+                    text: `${camelCase(node.name.value)}Converter`,
+                  }),
+                ],
+              }),
+            }),
+          ),
+        }),
+      )
+      .addStatement(
+        new ExpressionStatementBuilder({
+          expression: new IdentifierBuilder({ text: 'setDoc' })
+            .call()
+            .addArgument(new IdentifierBuilder({ text: 'ref' }))
+            .addArgument(createSource.copy())
+            .await(),
+        }),
+      )
+      .addStatement(
+        new VariableStatementBuilder({
+          declarationList: new VariableDeclarationListBuilder({})
+            .const()
+            .addDeclaration(
+              new VariableDeclarationBuilder({
+                name: 'res',
+                initializer: new IdentifierBuilder({ text: 'getDoc' })
+                  .call()
+                  .addArgument(new IdentifierBuilder({ text: 'ref' }))
+                  .await(),
+              }),
+            ),
+        }),
+      )
+      .addStatement(
+        new ReturnStatementBuilder({
+          expression: new BinaryExpressionBuilder({
+            left: new IdentifierBuilder({ text: 'res' }).dot('data').call(),
+            operator: SyntaxKind.QuestionQuestionToken,
+            right: new NullBuilder({}),
+          }),
+        }),
+      )
+    const addDocBlock = new BlockBuilder({ multiLine: true })
+      .addStatement(
+        new VariableStatementBuilder({
+          declarationList: new VariableDeclarationListBuilder({
+            flags: NodeFlags.Const,
+          }).addDeclaration(
+            new VariableDeclarationBuilder({
+              name: 'ref',
+              initializer: new AwaitExpressionBuilder({
+                expression: new CallExpressionBuilder({
+                  expression: new IdentifierBuilder({ text: 'addDoc' }),
+                })
+                  .addArgument(
+                    new CallExpressionBuilder({
+                      expression: new PropertyAccessExpressionBuilder({
+                        expression: new CallExpressionBuilder({
+                          expression: new IdentifierBuilder({
+                            text: 'collection',
+                          }),
+                        })
+                          .addArgument(
+                            new IdentifierBuilder({ text: 'firestore' }),
+                          )
+                          .addArgument(
+                            TemplateExpressionBuilder.fromCode(
+                              /* TODO */ `\`$\{todo}\``,
+                            ),
+                          ),
+                        name: 'withConverter',
+                      }),
+                    }).addArgument(
+                      new IdentifierBuilder({
+                        text: `${camelCase(node.name.value)}Converter`,
+                      }),
+                    ),
+                  )
+                  .addArgument(createSource.copy()),
+              }),
+            }),
+          ),
+        }),
+      )
+      .addStatement(
+        new VariableStatementBuilder({
+          declarationList: new VariableDeclarationListBuilder({
+            flags: NodeFlags.Const,
+          }).addDeclaration(
+            new VariableDeclarationBuilder({
+              name: 'res',
+              initializer: new CallExpressionBuilder({
+                expression: new IdentifierBuilder({ text: 'getDoc' }),
+              })
+                .addArgument(new IdentifierBuilder({ text: 'ref' }))
+                .await(),
+            }),
+          ),
+        }),
+      )
+      .addStatement(
+        new ReturnStatementBuilder({
+          expression: new BinaryExpressionBuilder({
+            left: new IdentifierBuilder({ text: 'res' }).dot('data').call(),
+            operator: SyntaxKind.QuestionQuestionToken,
+            right: new NullBuilder({}),
+          }),
+        }),
+      )
+
+    this._mutations.push(
+      new MethodDeclarationBuilder({
+        name: new IdentifierBuilder({ text: `create${node.name.value}` }),
+        modifiers: [new ModifierBuilder({ kind: SyntaxKind.AsyncKeyword })],
+        parameters: [
+          new ParameterDeclarationBuilder({ name: 'parent' }),
+          new ParameterDeclarationBuilder({ name: 'args' }),
+          new ParameterDeclarationBuilder({ name: 'context' }),
+          new ParameterDeclarationBuilder({ name: 'info' }),
+        ],
+        body: match.autoIdField
+          ? new BlockBuilder({ multiLine: true }).addStatement(
+              new IfStatementBuilder({
+                expression: new IdentifierBuilder({ text: 'args' })
+                  .dot('input')
+                  .dot('id'),
+                thenStatement: setDocBlock.copy(),
+                elseStatement: addDocBlock.copy(),
+              }),
+            )
+          : setDocBlock.copy(),
+      }),
+    )
+  }
+
   private _processType(
     node: ObjectTypeDefinitionNode,
     directives: FirestoreType['directives'],
@@ -554,6 +744,7 @@ export class FirestoreServerVisitor<
   ) {
     const converter = this._processConverter(node, directives, match, fields)
     this._processGetQuery(node, directives, match, fields, converter)
+    this._processCreateMutation(node, directives, match, fields)
   }
 
   override FirestoreTypeDefinition(
