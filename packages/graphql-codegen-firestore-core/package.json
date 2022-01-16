@@ -1,6 +1,6 @@
 {
   "name": "@firebase-graphql/graphql-codegen-firestore-core",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "files": [
     "dist"
   ],
@@ -31,7 +31,6 @@
     "build-watch": "run-p \"build:* -- --watch\""
   },
   "dependencies": {
-    "@graphql-codegen/plugin-helpers": "^2.3.2",
     "@graphql-codegen/schema-ast": "^2.4.1",
     "@graphql-codegen/visitor-plugin-common": "^2.5.2"
   },

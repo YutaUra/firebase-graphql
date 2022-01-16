@@ -1,10 +1,9 @@
 import {
-  ConstArgumentNode,
+  ASTNode,
   ConstDirectiveNode,
   ConstObjectFieldNode,
   ConstValueNode,
   Kind,
-  ObjectTypeDefinitionNode,
 } from 'graphql'
 import {
   FirestoreRulesAuthOperation,
@@ -16,19 +15,17 @@ type EnumLike = {
   [nu: number]: string
 }
 
-type Node =
-  | ConstDirectiveNode
-  | ConstValueNode
-  | ObjectTypeDefinitionNode
-  | ConstDirectiveNode
-  | ConstArgumentNode
-  | ConstObjectFieldNode
+type Node = ASTNode
 
 type Transformer<T, V> = (node: Readonly<T>) => V
 
 interface INodeTransformer<K extends unknown, V extends Node = Node> {
   transform(value: Readonly<V>): K
 }
+
+export type InferNodeTransformer<T> = T extends NodeTransformer<infer V>
+  ? V
+  : never
 
 export class NodeTransformer<K extends unknown, V extends Node = Node>
   implements INodeTransformer<K, V>
@@ -58,7 +55,7 @@ export class NodeTransformer<K extends unknown, V extends Node = Node>
     return new EnumValueNodeTransformer(_enum)
   }
 
-  static directive<T>() {
+  static directive() {
     return new ConstDirectiveNodeTransformer({})
   }
 
@@ -319,7 +316,9 @@ type ConstDirectiveTransformer<T extends {}> = {
   [K in keyof T]: INodeTransformer<T[K]>
 }
 
-class ConstDirectiveNodeTransformer<T extends {}> extends NodeTransformer<T> {
+export class ConstDirectiveNodeTransformer<
+  T extends {},
+> extends NodeTransformer<T> {
   constructor(private constDirectiveTransformer: ConstDirectiveTransformer<T>) {
     super((node) => {
       if (node.kind !== Kind.DIRECTIVE) {

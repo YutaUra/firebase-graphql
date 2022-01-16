@@ -1,0 +1,23 @@
+scalar Date
+directive @firestore(document: String!) on OBJECT
+directive @createdAt on FIELD_DEFINITION
+directive @updatedAt on FIELD_DEFINITION
+
+directive @auth(rules: [AuthRule!]!) on OBJECT
+input AuthRule {
+  allow: AuthStrategy!
+  ownerField: String
+  operations: [ModelOperation!]
+}
+enum AuthStrategy {
+  owner
+  private
+  public
+}
+enum ModelOperation {
+  create
+  update
+  delete
+  get
+  list
+}

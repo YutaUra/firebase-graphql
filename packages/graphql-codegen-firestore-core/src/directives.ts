@@ -17,3 +17,7 @@ export interface FirestoreRulesAuthRule {
   ownerField?: String
   operations?: FirestoreRulesAuthOperation[]
 }
+
+export enum FirestoreRelationType {
+  GET = 'get',
+}
