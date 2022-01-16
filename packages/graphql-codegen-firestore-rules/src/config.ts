@@ -1,3 +1,9 @@
-import { RawTypesConfig } from '@graphql-codegen/visitor-plugin-common'
+import {
+  FirestoreCoreConfig,
+  FirestoreCoreParsedConfig,
+} from '@firebase-graphql/graphql-codegen-firestore-core'
 
-export interface FirestoreRulesPluginConfig extends RawTypesConfig {}
+export interface FirestoreRulesPluginConfig extends FirestoreCoreConfig {}
+
+export interface FirestoreRulesPluginParsedConfig
+  extends FirestoreCoreParsedConfig {}

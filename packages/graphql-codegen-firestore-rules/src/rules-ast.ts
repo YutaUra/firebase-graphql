@@ -18,7 +18,7 @@ export interface FirestoreRulesServiceAst {
 
 export enum FirestoreRulesMatchAllowKind {
   CREATE = 'create',
-  READ = 'read',
+  GET = 'get',
   UPDATE = 'update',
   DELETE = 'delete',
   LIST = 'list',

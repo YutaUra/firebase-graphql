@@ -1,6 +1,7 @@
 import {
   FirestoreRulesAstKind,
   FirestoreRulesFunctionAst,
+  FirestoreRulesMatchAllowKind,
   FirestoreRulesMatchAst,
   FirestoreRulesRootAst,
   FirestoreRulesServiceAst,
@@ -38,6 +39,14 @@ const renderService = (
   ].join('\n')
 }
 
+const matchIndex = {
+  [FirestoreRulesMatchAllowKind.GET]: 1,
+  [FirestoreRulesMatchAllowKind.LIST]: 2,
+  [FirestoreRulesMatchAllowKind.CREATE]: 3,
+  [FirestoreRulesMatchAllowKind.UPDATE]: 4,
+  [FirestoreRulesMatchAllowKind.DELETE]: 5,
+}
+
 const renderMatch = (
   match: FirestoreRulesMatchAst,
   config: Required<RenderRulesConfig>,
@@ -52,20 +61,32 @@ const renderMatch = (
         ).split('\n'),
       )
       .map((v) => `${config.indent}${v}`),
-    ...Object.entries(match.allow || {}).map(([key, value]) => {
-      if (typeof value === 'string') {
-        return `${config.indent}allow ${key}: if ${value}`
-      } else if (value.length === 1) {
-        return `${config.indent}allow ${key}: if ${value[0]}`
-      } else {
-        return [
-          `${config.indent}allow ${key}: if ${value[0]}`,
-          ...value
-            .slice(1)
-            .map((v) => `${config.indent}               ${config.indent}${v}`),
-        ].join('\n')
-      }
-    }),
+
+    ...Object.entries(match.allow || {})
+      .filter(
+        ([, value]) =>
+          typeof value !== 'undefined' &&
+          (!Array.isArray(value) || value.length > 0),
+      )
+      .map<[FirestoreRulesMatchAllowKind, string | string[]]>(
+        ([kind, value]) => [kind as FirestoreRulesMatchAllowKind, value],
+      )
+      .sort(([a], [b]) => {
+        return matchIndex[a] - matchIndex[b]
+      })
+      .flatMap(([key, value]) => {
+        if (typeof value === 'string') {
+          return `${config.indent}allow ${key}: if ${value}`
+        } else if (value.length === 0) {
+          return []
+        } else {
+          return [
+            `${config.indent}allow ${key}: if (`,
+            ...value.map((v) => `${config.indent}${config.indent}${v}`),
+            `${config.indent})`,
+          ]
+        }
+      }),
     `}`,
   ].join('\n')
 }
