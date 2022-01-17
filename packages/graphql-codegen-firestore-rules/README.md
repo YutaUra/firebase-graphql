@@ -1,7 +1,12 @@
 # `@firebase-graphql/graphql-codegen-firestore-rules`
 
-[![npm version](https://badge.fury.io/js/@firebase-graphql%2Fgraphql-codegen-firestore-rules.svg)](https://badge.fury.io/js/@firebase-graphql%2Fgraphql-codegen-firestore-rules)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<div align="center">
+
+[![npm downloads](https://img.shields.io/npm/dm/@firebase-graphql/graphql-codegen-firestore-rules.svg?style=for-the-badge)](https://www.npmjs.com/package/@firebase-graphql/graphql-codegen-firestore-rules)
+[![npm](https://img.shields.io/npm/dt/@firebase-graphql/graphql-codegen-firestore-rules.svg?style=for-the-badge)](https://www.npmjs.com/package/@firebase-graphql/graphql-codegen-firestore-rules)
+[![npm](https://img.shields.io/npm/l/@firebase-graphql/graphql-codegen-firestore-rules?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+</div>
 
 ## Abstract
 
