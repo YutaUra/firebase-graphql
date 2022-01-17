@@ -169,7 +169,7 @@ type User
 ```yaml
 # codegen.yml
 generators:
-  - firestore.rules:
+  firestore.rules:
     schema: firestore.graphql
     plugins:
       - '@firebase-graphql/graphql-codegen-firestore-rules'
