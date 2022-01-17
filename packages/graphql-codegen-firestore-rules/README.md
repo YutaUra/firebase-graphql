@@ -1,5 +1,8 @@
 # `@firebase-graphql/graphql-codegen-firestore-rules`
 
+[![npm version](https://badge.fury.io/js/@firebase-graphql%2Fgraphql-codegen-firestore-rules.svg)](https://badge.fury.io/js/@firebase-graphql%2Fgraphql-codegen-firestore-rules)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ## Abstract
 
 - This package is a member of the [`firebase-graphql`](https://github.com/YutaUra/firebase-graphql) package family.

@@ -1,11 +1,16 @@
 {
   "name": "@firebase-graphql/graphql-codegen-firestore-rules",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "files": [
     "dist"
   ],
   "author": "YutaUra",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YutaUra/firebase-graphql.git",
+    "directory": "packages/graphql-codegen-firestore-rules"
+  },
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "typings": "./dist/types/index.d.ts",
